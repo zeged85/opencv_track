@@ -23,7 +23,7 @@ class LineFollower(object):
 	def __init__(self):
 
 		self.bridge_object = CvBridge()
-		self.image = rospy.Subscriber("/tb3_0/camera/rgb/image_raw",Image,self.camera_callback)
+		self.image = rospy.Subscriber("/camera/rgb/image_raw",Image,self.camera_callback)
 
 	def camera_callback(self,data):
 
@@ -46,10 +46,10 @@ class LineFollower(object):
 			upper_red = np.array([0,255,255])
 
 			mask = cv2.inRange(hsv, lower_red, upper_red)
-			res = cv2.bitwise_and(crop_image, crop_image, mask=mask)
+			
 
 
-			#calc centroid
+			#calc centroid using image moments
 			m = cv2.moments(mask,False)
 			
 			target_found = False
@@ -62,6 +62,19 @@ class LineFollower(object):
 
 			#draw centroids
 			#cv2.circle(img, center, radius, color[, thickness[, lineType[, shift]]])
+			res = cv2.bitwise_and(crop_image, crop_image, mask=mask)
+			_, contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_L1)
+			centers = []
+			for i in range(len(contours)):
+				moments = cv2.moments(contours[i])
+				try:
+					centers.append((int(moments['m10']/moments['m00']), int(moments['m01']/moments['m00'])))
+					cv2.circle(res, centers[-1], 10, (0,255,0), -1)
+				except ZeroDivisionError:
+					pass
+
+
+
 			cv2.circle(res, (int(cx), int(cy)), 10, (255,0,0), -1)
 
 			global last_value
@@ -122,11 +135,11 @@ class LineFollower(object):
 		cv2.imshow("Masked", res)
 		cv2.waitKey(1)
 
-pub_ = rospy.Publisher('/tb3_0/cmd_vel', Twist, queue_size=50)
+pub_ = rospy.Publisher('/cmd_vel', Twist, queue_size=50)
 def main():
 
 	rospy.init_node('line_following_node', anonymous=True)
-	rospy.Subscriber("/tb3_0/scan", LaserScan, scan_cb, queue_size=1)
+	rospy.Subscriber("/scan", LaserScan, scan_cb, queue_size=1)
 	line_follower_object = LineFollower()
 	try:
 		rospy.spin()
